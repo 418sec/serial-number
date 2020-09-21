@@ -2,7 +2,7 @@
 
 var fs		= require('fs');
 var http	= require('http');
-var exec	= require('child_process').exec;
+var spawn	= require('child_process').spawn;
 
 var serialNumber = function (cb, cmdPrefix) {
 	var delimiter = ': ';
@@ -103,11 +103,27 @@ var serialNumber = function (cb, cmdPrefix) {
 
 	if (serialNumber.preferUUID) vals.reverse();
 
-	exec(cmdPrefix + cmd + vals[0], function (error, stdout) {
-		if (error || parseResult(stdout).length > 1) {
-			stdoutHandler(error, stdout);
+	var cmd1 = cmdPrefix + cmd + vals[0];
+	var cmd2 = cmdPrefix + cmd + vals[1];
+	cmd1 = cmd1.split('|');
+	cmd2 = cmd2.split('|');
+	const echo = spawn(cmd1[0].split(' ')[0], cmd1[0].split(' ').slice(1));
+	const grep = spawn(cmd1[1].split(' ')[1], cmd1[1].split(' ').slice(2));
+	echo.stdout.on('data', (data) =>{
+		grep.stdin.write(data);
+	  });
+	grep.stdout.on('data', (error, data)=> {
+		if (error || parseResult(data.toString()).length > 1) {
+			stdoutHandler(error, data.toString());
 		} else {
-			exec(cmdPrefix + cmd + vals[1], stdoutHandler);
+			const echo2 = spawn(cmd2[0].split(' ')[0], cmd2[0].split(' ').slice(1));
+			const grep2 = spawn(cmd2[1].split(' ')[0], cmd2[1].split(' ').slice(1));
+			echo2.stdout.on('data', (data) => {
+				grep2.stdin.write(data);
+			  });
+			grep2.stdout.on('data', (error, data) => {
+				stdoutHandler(error, data.toString());
+			});
 		}
 	});
 };
